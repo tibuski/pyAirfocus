@@ -25,34 +25,33 @@ pyAirfocus is a Python package that provides a simple and intuitive interface fo
 
 ## Installation
 
+### Prerequisites
+
+- Python 3.11 or higher
+- Git
+
 ### Clone the Repository
-
-```bash
-git clone https://github.com/yourusername/pyAirfocus.git
-cd pyAirfocus
-```
-
-### Create and Activate a Virtual Environment
 
 #### Windows
 
-```bash
-python -m venv venv
-venv\Scripts\activate
+```powershell
+git clone https://github.com/YOUR_USERNAME/pyAirfocus.git
+cd pyAirfocus
+python -m venv .
+.\Scripts\activate
+pip install -r requirements.txt
 ```
 
 #### macOS/Linux
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
-### Install Dependencies
-
-```bash
+git clone https://github.com/YOUR_USERNAME/pyAirfocus.git
+cd pyAirfocus
+python3 -m venv .
+source ./bin/activate
 pip install -r requirements.txt
 ```
+
 
 ## Configuration
 
