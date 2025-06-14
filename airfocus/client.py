@@ -3,10 +3,19 @@ Base client for interacting with the Airfocus API.
 """
 
 import os
+import logging
 import httpx
 from typing import List, Dict, Any, Optional, TypeVar, Type
 from pydantic import BaseModel
 from dotenv import load_dotenv, find_dotenv
+
+from airfocus.constants import (
+    BASE_URL, DEFAULT_TIMEOUT, ENV_API_KEY, ENV_VERIFY_SSL,
+    ERROR_API_KEY_REQUIRED
+)
+
+# Configure logger for this module
+logger = logging.getLogger(__name__)
 
 T = TypeVar('T', bound=BaseModel)
 
@@ -16,22 +25,23 @@ class AirfocusClient:
     Handles authentication, requests, and error handling.
     """
     
-    def __init__(self, api_key: Optional[str] = None, verify_ssl: Optional[bool] = None):
+    def __init__(self, api_key: Optional[str] = None, verify_ssl: Optional[bool] = None, timeout: Optional[int] = None):
         # Load from .env if not provided
         if api_key is None:
             load_dotenv(find_dotenv(), override=True)
-            api_key = os.getenv("AIRFOCUS_API_KEY")
+            api_key = os.getenv(ENV_API_KEY)
             
         if verify_ssl is None:
-            verify_ssl_str = os.getenv("VERIFY_SSL", "true")
+            verify_ssl_str = os.getenv(ENV_VERIFY_SSL, "true")
             verify_ssl = verify_ssl_str.lower() == "true"
             
         if not api_key:
-            raise ValueError("API key is required. Set it in .env file or pass to constructor.")
+            raise ValueError(ERROR_API_KEY_REQUIRED)
             
         self.api_key = api_key
         self.verify_ssl = verify_ssl
-        self.base_url = "https://app.airfocus.com/api"
+        self.timeout = timeout or DEFAULT_TIMEOUT
+        self.base_url = BASE_URL
         self.headers = {
             "Authorization": f"Bearer {api_key}",
             "Accept": "application/json"
@@ -61,7 +71,9 @@ class AirfocusClient:
             Parsed JSON response
             
         Raises:
-            httpx.HTTPStatusError: If the request fails
+            httpx.HTTPStatusError: If the request fails with an HTTP error
+            httpx.RequestError: If the request fails due to network issues
+            ValueError: If the request method is invalid
         """
         url = self._get_full_url(endpoint)
         
@@ -69,10 +81,27 @@ class AirfocusClient:
         headers = kwargs.pop('headers', {})
         headers.update(self.headers)
         
-        with httpx.Client(verify=self.verify_ssl) as client:
-            response = getattr(client, method.lower())(url, headers=headers, **kwargs)
-            response.raise_for_status()
-            return response.json()
+        # Add timeout if not specified
+        if 'timeout' not in kwargs:
+            kwargs['timeout'] = self.timeout
+        
+        try:
+            with httpx.Client(verify=self.verify_ssl) as client:
+                response = getattr(client, method.lower())(url, headers=headers, **kwargs)
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP {e.response.status_code} error for {method.upper()} {endpoint}: {e.response.text}")
+            raise
+        except httpx.RequestError as e:
+            logger.error(f"Request failed for {method.upper()} {endpoint}: {e}")
+            raise
+        except AttributeError as e:
+            logger.error(f"Invalid HTTP method '{method}' for {endpoint}: {e}")
+            raise ValueError(f"Invalid HTTP method: {method}")
+        except Exception as e:
+            logger.error(f"Unexpected error for {method.upper()} {endpoint}: {e}")
+            raise
             
     def get(self, endpoint: str, **kwargs) -> Any:
         """Perform a GET request."""

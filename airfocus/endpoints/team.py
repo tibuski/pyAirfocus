@@ -2,9 +2,17 @@
 Endpoints for team-related operations in the Airfocus API.
 """
 
+import logging
 from typing import List, Optional, Dict, Any
 from airfocus.client import AirfocusClient
 from airfocus.models.team import TeamUser, Team
+from airfocus.constants import (
+    ENDPOINT_TEAM, ENDPOINT_TEAM_USERS, SUPPORTED_ROLES,
+    ERROR_USER_NOT_FOUND
+)
+
+# Configure logger for this module
+logger = logging.getLogger(__name__)
 
 class TeamEndpoints:
     """
@@ -21,7 +29,7 @@ class TeamEndpoints:
         Returns:
             List[TeamUser]: A list of team users
         """
-        return self.client.get_collection("/team/users", TeamUser)
+        return self.client.get_collection(ENDPOINT_TEAM_USERS, TeamUser)
     
     def get_user(self, user_identifier: str) -> Optional[TeamUser]:
         """
@@ -33,6 +41,10 @@ class TeamEndpoints:
         Returns:
             TeamUser: User information if found, None otherwise
         """
+        if not user_identifier:
+            logger.warning("User identifier is empty")
+            return None
+            
         users = self.get_users()
         
         # Try to find by user ID first
@@ -45,6 +57,7 @@ class TeamEndpoints:
             if user.email.lower() == user_identifier.lower():
                 return user
                 
+        logger.debug(f"User not found: {user_identifier}")
         return None
     
     def get_last_login(self, user_identifier: str) -> Optional[str]:
@@ -69,7 +82,7 @@ class TeamEndpoints:
         Returns:
             Team: Team information
         """
-        data = self.client.get("/team")
+        data = self.client.get(ENDPOINT_TEAM)
         return Team(**data)
     
     def change_user_role(self, user_id: str, role: str) -> None:
@@ -79,12 +92,22 @@ class TeamEndpoints:
         Args:
             user_id: The user's ID
             role: The new role (admin, editor, contributor)
+            
+        Raises:
+            ValueError: If role is not supported or user_id is empty
         """
+        if not user_id:
+            raise ValueError("User ID cannot be empty")
+            
+        if role not in SUPPORTED_ROLES:
+            raise ValueError(f"Role must be one of: {', '.join(SUPPORTED_ROLES)}")
+            
         payload = {
             "userId": user_id,
             "role": role
         }
         self.client.post("/team/users/role", json=payload)
+        logger.info(f"Changed role for user {user_id} to {role}")
     
     def disable_user(self, user_id: str, disabled: bool = True) -> None:
         """
@@ -93,12 +116,20 @@ class TeamEndpoints:
         Args:
             user_id: The user's ID
             disabled: Whether to disable (True) or enable (False) the user
+            
+        Raises:
+            ValueError: If user_id is empty
         """
+        if not user_id:
+            raise ValueError("User ID cannot be empty")
+            
         payload = {
             "userId": user_id,
             "disabled": disabled
         }
         self.client.post("/team/users/disabled", json=payload)
+        action = "disabled" if disabled else "enabled"
+        logger.info(f"{action.capitalize()} user {user_id}")
         
     def invite_user(self, email: str, full_name: str, role: str) -> Dict[str, Any]:
         """
@@ -111,13 +142,27 @@ class TeamEndpoints:
             
         Returns:
             Dict: Response data from the API
+            
+        Raises:
+            ValueError: If any parameter is invalid
         """
+        if not email or '@' not in email:
+            raise ValueError("Valid email is required")
+            
+        if not full_name or not full_name.strip():
+            raise ValueError("Full name is required")
+            
+        if role not in SUPPORTED_ROLES:
+            raise ValueError(f"Role must be one of: {', '.join(SUPPORTED_ROLES)}")
+            
         payload = {
-            "email": email,
-            "fullName": full_name,
+            "email": email.lower().strip(),
+            "fullName": full_name.strip(),
             "role": role
         }
-        return self.client.post("/team/users/invite", json=payload)
+        result = self.client.post("/team/users/invite", json=payload)
+        logger.info(f"Invited user {email} with role {role}")
+        return result
         
     def kick_user(self, user_id: str) -> None:
         """
@@ -125,8 +170,15 @@ class TeamEndpoints:
         
         Args:
             user_id: The user's ID
+            
+        Raises:
+            ValueError: If user_id is empty
         """
+        if not user_id:
+            raise ValueError("User ID cannot be empty")
+            
         payload = {
             "userId": user_id
         }
         self.client.post("/team/users/kick", json=payload)
+        logger.info(f"Removed user {user_id} from team")

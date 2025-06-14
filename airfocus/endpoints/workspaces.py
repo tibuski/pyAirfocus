@@ -2,9 +2,19 @@
 Endpoints for workspace-related operations in the Airfocus API.
 """
 
+import logging
 from typing import List, Optional, Dict, Any, Tuple, Set
 from airfocus.client import AirfocusClient
 from airfocus.models.workspace import Workspace, WorkspaceGroup
+from airfocus.constants import (
+    ENDPOINT_WORKSPACES, ENDPOINT_WORKSPACES_SEARCH, ENDPOINT_WORKSPACES_GROUPS,
+    ENDPOINT_WORKSPACES_GROUPS_SEARCH, FIELD_ITEMS, FIELD_DATA, FIELD_WORKSPACES,
+    FIELD_GROUPS, FIELD_EMBEDDED, FIELD_WORKSPACE_IDS, ERROR_WORKSPACE_NOT_FOUND,
+    ERROR_GROUP_NOT_FOUND
+)
+
+# Configure logger for this module
+logger = logging.getLogger(__name__)
 
 class WorkspacesEndpoints:
     """
@@ -25,7 +35,7 @@ class WorkspacesEndpoints:
             List[Workspace]: A list of workspaces
         """
         # Based on our testing, the search endpoint is the correct one
-        data = self.client.post("/workspaces/search", json={
+        data = self.client.post(ENDPOINT_WORKSPACES_SEARCH, json={
             "archived": include_archived
         })
         
@@ -35,12 +45,12 @@ class WorkspacesEndpoints:
             
         # Extract workspaces from the response - primarily from "items" based on our findings
         workspaces_data = []
-        if "items" in data and isinstance(data["items"], list):
-            workspaces_data = data["items"]
-        elif "data" in data and isinstance(data["data"], list):
-            workspaces_data = data["data"]
-        elif "workspaces" in data and isinstance(data["workspaces"], list):
-            workspaces_data = data["workspaces"]
+        if FIELD_ITEMS in data and isinstance(data[FIELD_ITEMS], list):
+            workspaces_data = data[FIELD_ITEMS]
+        elif FIELD_DATA in data and isinstance(data[FIELD_DATA], list):
+            workspaces_data = data[FIELD_DATA]
+        elif FIELD_WORKSPACES in data and isinstance(data[FIELD_WORKSPACES], list):
+            workspaces_data = data[FIELD_WORKSPACES]
         
         # Parse workspaces into models, handling any errors
         workspaces = []
@@ -49,7 +59,7 @@ class WorkspacesEndpoints:
                 workspace = Workspace(**ws_data)
                 workspaces.append(workspace)
             except Exception as e:
-                print(f"Warning: Could not parse workspace: {e}")
+                logger.warning(f"Could not parse workspace: {e}")
         
         return workspaces
     
@@ -63,16 +73,22 @@ class WorkspacesEndpoints:
         Returns:
             Optional[Workspace]: The workspace details or None if not found
         """
+        if not workspace_id:
+            logger.warning("Workspace ID is empty")
+            return None
+            
         try:
             # First try the direct endpoint
-            data = self.client.get(f"/workspaces/{workspace_id}")
+            data = self.client.get(f"{ENDPOINT_WORKSPACES}/{workspace_id}")
             return Workspace(**data)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Direct workspace endpoint failed for {workspace_id}: {e}")
             # If that fails, try to find it in the list of all workspaces
             workspaces = self.get_workspaces(include_archived=True)
             for workspace in workspaces:
                 if workspace.id == workspace_id:
                     return workspace
+            logger.debug(f"Workspace not found: {workspace_id}")
             return None
     
     def create_workspace(self, name: str, description: str, order: int = 0, group_id: Optional[str] = None) -> Workspace:
@@ -87,9 +103,18 @@ class WorkspacesEndpoints:
             
         Returns:
             Workspace: The created workspace
+            
+        Raises:
+            ValueError: If name is empty or order is negative
         """
+        if not name or not name.strip():
+            raise ValueError("Workspace name cannot be empty")
+            
+        if order < 0:
+            raise ValueError("Order must be a non-negative integer")
+            
         payload = {
-            "name": name,
+            "name": name.strip(),
             "description": description,
             "order": order
         }
@@ -97,8 +122,10 @@ class WorkspacesEndpoints:
         if group_id:
             payload["groupId"] = group_id
             
-        data = self.client.post("/workspaces", json=payload)
-        return Workspace(**data)
+        data = self.client.post(ENDPOINT_WORKSPACES, json=payload)
+        workspace = Workspace(**data)
+        logger.info(f"Created workspace: {workspace.name} (ID: {workspace.id})")
+        return workspace
     
     def update_workspace(self, workspace_id: str, **kwargs) -> Workspace:
         """
@@ -110,9 +137,17 @@ class WorkspacesEndpoints:
             
         Returns:
             Workspace: The updated workspace
+            
+        Raises:
+            ValueError: If workspace_id is empty
         """
-        data = self.client.put(f"/workspaces/{workspace_id}", json=kwargs)
-        return Workspace(**data)
+        if not workspace_id:
+            raise ValueError("Workspace ID cannot be empty")
+            
+        data = self.client.put(f"{ENDPOINT_WORKSPACES}/{workspace_id}", json=kwargs)
+        workspace = Workspace(**data)
+        logger.info(f"Updated workspace: {workspace.name} (ID: {workspace.id})")
+        return workspace
     
     def delete_workspace(self, workspace_id: str) -> None:
         """
@@ -120,8 +155,15 @@ class WorkspacesEndpoints:
         
         Args:
             workspace_id: The workspace ID
+            
+        Raises:
+            ValueError: If workspace_id is empty
         """
-        self.client.delete(f"/workspaces/{workspace_id}")
+        if not workspace_id:
+            raise ValueError("Workspace ID cannot be empty")
+            
+        self.client.delete(f"{ENDPOINT_WORKSPACES}/{workspace_id}")
+        logger.info(f"Deleted workspace: {workspace_id}")
     
     def get_workspace_groups(self) -> List[WorkspaceGroup]:
         """
@@ -131,17 +173,17 @@ class WorkspacesEndpoints:
             List[WorkspaceGroup]: A list of workspace groups
         """
         try:
-            data = self.client.post("/workspaces/groups/search", json={})
+            data = self.client.post(ENDPOINT_WORKSPACES_GROUPS_SEARCH, json={})
             
             # Extract groups from the response - primarily from "items" based on our findings
             groups_data = []
             if isinstance(data, dict):
-                if "items" in data and isinstance(data["items"], list):
-                    groups_data = data["items"]
-                elif "data" in data and isinstance(data["data"], list):
-                    groups_data = data["data"]
-                elif "groups" in data and isinstance(data["groups"], list):
-                    groups_data = data["groups"]
+                if FIELD_ITEMS in data and isinstance(data[FIELD_ITEMS], list):
+                    groups_data = data[FIELD_ITEMS]
+                elif FIELD_DATA in data and isinstance(data[FIELD_DATA], list):
+                    groups_data = data[FIELD_DATA]
+                elif FIELD_GROUPS in data and isinstance(data[FIELD_GROUPS], list):
+                    groups_data = data[FIELD_GROUPS]
             
             # Parse groups into models, handling any errors
             groups = []
@@ -150,12 +192,12 @@ class WorkspacesEndpoints:
                     group = WorkspaceGroup(**group_data)
                     groups.append(group)
                 except Exception as e:
-                    print(f"Warning: Could not parse workspace group: {e}")
+                    logger.warning(f"Could not parse workspace group: {e}")
             
             return groups
         except Exception as e:
             # If the endpoint fails, return an empty list
-            print(f"Error getting workspace groups: {e}")
+            logger.error(f"Error getting workspace groups: {e}")
             return []
     
     def get_group_hierarchy(self) -> Tuple[Dict[str, WorkspaceGroup], List[WorkspaceGroup]]:
@@ -191,12 +233,12 @@ class WorkspacesEndpoints:
             # Method 1: Use _embedded.workspaceIds in group data
             for group in groups:
                 if group._embedded and isinstance(group._embedded, dict):
-                    workspace_ids = group._embedded.get("workspaceIds", [])
+                    workspace_ids = group._embedded.get(FIELD_WORKSPACE_IDS, [])
                     if isinstance(workspace_ids, list):
                         for ws_id in workspace_ids:
                             group.add_workspace(ws_id)
         except Exception as e:
-            print(f"Error processing group workspace relationships from _embedded: {e}")
+            logger.debug(f"Error processing group workspace relationships from _embedded: {e}")
         
         # Method 2: Get all workspaces and map them to groups by groupId
         try:
@@ -206,7 +248,7 @@ class WorkspacesEndpoints:
                     group = groups_by_id[workspace.groupId]
                     group.add_workspace(workspace.id)
         except Exception as e:
-            print(f"Error mapping workspaces to groups by groupId: {e}")
+            logger.debug(f"Error mapping workspaces to groups by groupId: {e}")
         
         return groups_by_id, top_level_groups
     
@@ -221,11 +263,16 @@ class WorkspacesEndpoints:
         Returns:
             List[Workspace]: List of workspaces in the group
         """
+        if not group_id:
+            logger.warning("Group ID is empty")
+            return []
+            
         # Get all workspaces and groups
         workspaces = self.get_workspaces(include_archived=True)
         groups_by_id, _ = self.get_group_hierarchy()
         
         if group_id not in groups_by_id:
+            logger.debug(f"Group not found: {group_id}")
             return []
             
         # Get the target group
@@ -282,17 +329,27 @@ class WorkspacesEndpoints:
         Returns:
             bool: True if successful, False otherwise
         """
+        if not workspace_id:
+            logger.warning("Workspace ID is empty")
+            return False
+            
+        if not group_id:
+            logger.warning("Group ID is empty")
+            return False
+            
         try:
             # Get the workspace to verify it exists
             workspace = self.get_workspace(workspace_id)
             if not workspace:
+                logger.warning(f"Workspace not found: {workspace_id}")
                 return False
                 
             # Update the workspace with the new group ID
             self.update_workspace(workspace_id, groupId=group_id)
+            logger.info(f"Moved workspace {workspace_id} to group {group_id}")
             return True
         except Exception as e:
-            print(f"Error moving workspace to group: {e}")
+            logger.error(f"Error moving workspace to group: {e}")
             return False
             
     def create_workspace_group(self, name: str, parent_group_id: Optional[str] = None) -> Optional[WorkspaceGroup]:
@@ -305,15 +362,23 @@ class WorkspacesEndpoints:
             
         Returns:
             Optional[WorkspaceGroup]: The created group or None if creation failed
+            
+        Raises:
+            ValueError: If name is empty
         """
+        if not name or not name.strip():
+            raise ValueError("Group name cannot be empty")
+            
         try:
-            payload = {"name": name}
+            payload = {"name": name.strip()}
             
             if parent_group_id:
                 payload["parentGroupId"] = parent_group_id
                 
-            data = self.client.post("/workspaces/groups", json=payload)
-            return WorkspaceGroup(**data)
+            data = self.client.post(ENDPOINT_WORKSPACES_GROUPS, json=payload)
+            group = WorkspaceGroup(**data)
+            logger.info(f"Created workspace group: {group.name} (ID: {group.id})")
+            return group
         except Exception as e:
-            print(f"Error creating workspace group: {e}")
+            logger.error(f"Error creating workspace group: {e}")
             return None

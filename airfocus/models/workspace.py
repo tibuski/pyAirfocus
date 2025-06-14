@@ -3,7 +3,7 @@ Pydantic models for workspace-related Airfocus API objects.
 """
 
 from typing import Optional, Dict, List, Any, Union, Set
-from pydantic import BaseModel, Field, root_validator, computed_field
+from pydantic import BaseModel, Field, root_validator, validator
 
 class RichTextDescription(BaseModel):
     """Model for rich text descriptions that use blocks."""
@@ -31,6 +31,20 @@ class Workspace(BaseModel):
     defaultPermission: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
     _embedded: Optional[Dict[str, Any]] = None
+    
+    @validator('name')
+    def validate_name(cls, v):
+        """Validate workspace name is not empty."""
+        if not v or not v.strip():
+            raise ValueError('Workspace name cannot be empty')
+        return v.strip()
+    
+    @validator('order')
+    def validate_order(cls, v):
+        """Validate order is a non-negative integer."""
+        if v is not None and v < 0:
+            raise ValueError('Order must be a non-negative integer')
+        return v
     
     # Make the model flexible to handle various field names
     @root_validator(pre=True)
@@ -76,7 +90,7 @@ class Workspace(BaseModel):
                     if 'text' in block:
                         text_blocks.append(block['text'])
                 return " ".join(text_blocks)
-            except:
+            except Exception:
                 return "[Rich Text]"
         return str(self.description)
 
@@ -97,6 +111,20 @@ class WorkspaceGroup(BaseModel):
     # References to child groups and workspaces (not from API, populated by client)
     child_groups: List[str] = Field(default_factory=list)
     workspace_ids: List[str] = Field(default_factory=list)
+    
+    @validator('name')
+    def validate_name(cls, v):
+        """Validate group name is not empty."""
+        if not v or not v.strip():
+            raise ValueError('Group name cannot be empty')
+        return v.strip()
+    
+    @validator('order')
+    def validate_order(cls, v):
+        """Validate order is a non-negative integer."""
+        if v is not None and v < 0:
+            raise ValueError('Order must be a non-negative integer')
+        return v
     
     # Make the model flexible to handle various field names
     @root_validator(pre=True)
@@ -135,10 +163,14 @@ class WorkspaceGroup(BaseModel):
     
     def add_child_group(self, group_id: str) -> None:
         """Add a child group to this group."""
+        if not group_id:
+            raise ValueError("Group ID cannot be empty")
         if group_id not in self.child_groups:
             self.child_groups.append(group_id)
     
     def add_workspace(self, workspace_id: str) -> None:
         """Add a workspace to this group."""
+        if not workspace_id:
+            raise ValueError("Workspace ID cannot be empty")
         if workspace_id not in self.workspace_ids:
             self.workspace_ids.append(workspace_id)
