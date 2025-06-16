@@ -8,9 +8,9 @@ from airfocus.client import AirfocusClient
 from airfocus.models.workspace import Workspace, WorkspaceGroup
 from airfocus.constants import (
     ENDPOINT_WORKSPACES, ENDPOINT_WORKSPACES_SEARCH, ENDPOINT_WORKSPACES_GROUPS,
-    ENDPOINT_WORKSPACES_GROUPS_SEARCH, FIELD_ITEMS, FIELD_DATA, FIELD_WORKSPACES,
-    FIELD_GROUPS, FIELD_EMBEDDED, FIELD_WORKSPACE_IDS, ERROR_WORKSPACE_NOT_FOUND,
-    ERROR_GROUP_NOT_FOUND
+    ENDPOINT_WORKSPACES_GROUPS_SEARCH, ENDPOINT_WORKSPACES_LIST, FIELD_ITEMS, FIELD_DATA, 
+    FIELD_WORKSPACES, FIELD_GROUPS, FIELD_EMBEDDED, FIELD_WORKSPACE_IDS, 
+    ERROR_WORKSPACE_NOT_FOUND, ERROR_GROUP_NOT_FOUND
 )
 
 # Configure logger for this module
@@ -203,35 +203,38 @@ class WorkspacesEndpoints:
     def get_group_hierarchy(self) -> Tuple[Dict[str, WorkspaceGroup], List[WorkspaceGroup]]:
         """
         Get the workspace group hierarchy with parent-child relationships.
-        
+        For each group, fetch its details using /workspaces/groups/{workspaceGroupId}.
         Returns:
             Tuple containing:
                 - Dict[str, WorkspaceGroup]: Dictionary of all groups by ID
                 - List[WorkspaceGroup]: List of top-level groups (groups with no parent)
         """
-        # Get all groups
+        # Step 1: Get all group IDs
         groups = self.get_workspace_groups()
+        group_ids = [group.id for group in groups]
         
-        # Create a dictionary of groups by ID for easy lookup
-        groups_by_id = {group.id: group for group in groups}
+        # Step 2: Fetch each group by ID for full details
+        detailed_groups = []
+        for gid in group_ids:
+            try:
+                data = self.client.get(f"/workspaces/groups/{gid}")
+                detailed_groups.append(WorkspaceGroup(**data))
+            except Exception as e:
+                logger.warning(f"Could not fetch group {gid}: {e}")
         
-        # Build the parent-child relationships between groups
-        for group in groups:
-            # If the group has a parent, add it as a child to that parent
+        # Step 3: Build lookup and relationships
+        groups_by_id = {group.id: group for group in detailed_groups}
+        for group in detailed_groups:
             if group.parentGroupId and group.parentGroupId in groups_by_id:
                 parent = groups_by_id[group.parentGroupId]
                 parent.add_child_group(group.id)
-        
-        # Get top-level groups (groups with no parent)
         top_level_groups = [
-            group for group in groups 
-            if not group.parentGroupId or group.parentGroupId not in groups_by_id
+            group for group in detailed_groups
+            if not group.parentGroupId or str(group.parentGroupId).strip() == ""
         ]
-        
-        # Try to get workspace-to-group relationships
+        # Workspace-to-group relationships (same as before)
         try:
-            # Method 1: Use _embedded.workspaceIds in group data
-            for group in groups:
+            for group in detailed_groups:
                 if group._embedded and isinstance(group._embedded, dict):
                     workspace_ids = group._embedded.get(FIELD_WORKSPACE_IDS, [])
                     if isinstance(workspace_ids, list):
@@ -239,8 +242,6 @@ class WorkspacesEndpoints:
                             group.add_workspace(ws_id)
         except Exception as e:
             logger.debug(f"Error processing group workspace relationships from _embedded: {e}")
-        
-        # Method 2: Get all workspaces and map them to groups by groupId
         try:
             workspaces = self.get_workspaces(include_archived=True)
             for workspace in workspaces:
@@ -249,7 +250,6 @@ class WorkspacesEndpoints:
                     group.add_workspace(workspace.id)
         except Exception as e:
             logger.debug(f"Error mapping workspaces to groups by groupId: {e}")
-        
         return groups_by_id, top_level_groups
     
     def get_workspaces_in_group(self, group_id: str, include_subgroups: bool = True) -> List[Workspace]:
@@ -382,3 +382,50 @@ class WorkspacesEndpoints:
         except Exception as e:
             logger.error(f"Error creating workspace group: {e}")
             return None
+    
+    def get_workspaces_by_ids(self, workspace_ids: List[str]) -> Dict[str, Workspace]:
+        """
+        Get multiple workspaces by their IDs in a single API call using the workspaces/list endpoint.
+        This is much more efficient than making individual API calls for each workspace.
+        
+        Args:
+            workspace_ids: List of workspace IDs to retrieve
+            
+        Returns:
+            Dict[str, Workspace]: Dictionary of workspaces by their IDs
+        """
+        if not workspace_ids:
+            return {}
+            
+        try:
+            # Use the more efficient list endpoint - API expects a direct JSON array, not an object
+            data = self.client.post(ENDPOINT_WORKSPACES_LIST, json=workspace_ids)
+            
+            # Extract workspaces from the response
+            workspaces_data = []
+            if isinstance(data, dict):
+                if FIELD_ITEMS in data and isinstance(data[FIELD_ITEMS], list):
+                    workspaces_data = data[FIELD_ITEMS]
+                elif FIELD_DATA in data and isinstance(data[FIELD_DATA], list):
+                    workspaces_data = data[FIELD_DATA]
+                elif FIELD_WORKSPACES in data and isinstance(data[FIELD_WORKSPACES], list):
+                    workspaces_data = data[FIELD_WORKSPACES]
+                elif isinstance(data.get("workspaces"), list):
+                    workspaces_data = data["workspaces"]
+            elif isinstance(data, list):
+                # The API might directly return an array
+                workspaces_data = data
+            
+            # Parse workspaces into models and build the lookup dictionary
+            workspace_map = {}
+            for ws_data in workspaces_data:
+                try:
+                    workspace = Workspace(**ws_data)
+                    workspace_map[workspace.id] = workspace
+                except Exception as e:
+                    logger.warning(f"Could not parse workspace: {e}")
+            
+            return workspace_map
+        except Exception as e:
+            logger.error(f"Error getting workspaces by IDs: {e}")
+            return {}

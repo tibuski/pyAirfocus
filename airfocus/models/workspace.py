@@ -142,13 +142,18 @@ class WorkspaceGroup(BaseModel):
             values['teamId'] = values['team_id']
         if 'parent_group_id' in values and 'parentGroupId' not in values:
             values['parentGroupId'] = values['parent_group_id']
-        
+        # Map parentId (from API) to parentGroupId (internal)
+        if 'parentId' in values and 'parentGroupId' not in values:
+            values['parentGroupId'] = values['parentId']
         # Extract workspace IDs from _embedded if present
         if '_embedded' in values and isinstance(values['_embedded'], dict):
             embedded = values['_embedded']
+            # Support both workspaceIds and workspaces (list of dicts)
             if 'workspaceIds' in embedded and isinstance(embedded['workspaceIds'], list):
                 values['workspace_ids'] = embedded['workspaceIds']
-                
+            elif 'workspaces' in embedded and isinstance(embedded['workspaces'], list):
+                # Extract IDs from workspace objects
+                values['workspace_ids'] = [ws['id'] for ws in embedded['workspaces'] if 'id' in ws]
         return values
     
     @property
