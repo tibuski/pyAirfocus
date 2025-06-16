@@ -41,21 +41,21 @@ pyAirfocus is a Python package that provides a simple and intuitive interface fo
 #### Windows
 
 ```powershell
-git clone https://github.com/YOUR_USERNAME/pyAirfocus.git
+git clone https://github.com/tibuski/pyAirfocus.git
 cd pyAirfocus
 python -m venv .
 .\Scripts\activate
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
 #### macOS/Linux
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/pyAirfocus.git
+git clone https://github.com/tibuski/pyAirfocus.git
 cd pyAirfocus
-python3 -m venv .
+python -m venv .
 source ./bin/activate
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
 ## Configuration
@@ -75,10 +75,6 @@ VERIFY_SSL=true
 
 ```python
 from airfocus.client import AirfocusClient
-from airfocus.logging_config import setup_logging
-
-# Set up logging
-setup_logging(level=logging.INFO)
 
 # Initialize the client
 client = AirfocusClient()
