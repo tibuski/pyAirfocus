@@ -109,6 +109,18 @@ python list_users_last_seen.py
 
 This will display a table of all users with their names, roles, and last login times.
 
+#### Print Workspace Hierarchy
+
+```bash
+python print_hierarchy.py
+```
+
+This script displays a visual tree representation of your workspace hierarchy with color formatting:
+- Groups: Bold with different colors by level (purple, blue, cyan, green, yellow)
+- Workspaces: Yellow italic text
+
+The color-coded output makes it easy to distinguish between different levels of groups and workspaces.
+
 #### Test Improvements
 
 ```bash
@@ -135,6 +147,7 @@ pyAirfocus/
 │       ├── team.py          # Team and user models
 │       └── workspace.py     # Workspace and group models
 ├── list_users_last_seen.py  # CLI tool for listing users
+├── print_hierarchy.py       # CLI tool for printing workspace hierarchy
 ├── test_improvements.py     # Test script for improvements
 ├── requirements.txt         # Project dependencies
 └── .env                     # Environment variables (not in repo)
