@@ -8,8 +8,8 @@ from airfocus.client import AirfocusClient
 from airfocus.models.workspace import Workspace, WorkspaceGroup
 from airfocus.constants import (
     ENDPOINT_WORKSPACES, ENDPOINT_WORKSPACES_SEARCH, ENDPOINT_WORKSPACES_GROUPS,
-    ENDPOINT_WORKSPACES_GROUPS_SEARCH, ENDPOINT_WORKSPACES_LIST, FIELD_ITEMS, FIELD_DATA, 
-    FIELD_WORKSPACES, FIELD_GROUPS, FIELD_EMBEDDED, FIELD_WORKSPACE_IDS, 
+    ENDPOINT_WORKSPACES_GROUPS_SEARCH, ENDPOINT_WORKSPACES_LIST, ENDPOINT_WORKSPACES_GROUPS_LIST,
+    FIELD_ITEMS, FIELD_DATA, FIELD_WORKSPACES, FIELD_GROUPS, FIELD_EMBEDDED, FIELD_WORKSPACE_IDS, 
     ERROR_WORKSPACE_NOT_FOUND, ERROR_GROUP_NOT_FOUND
 )
 
@@ -428,4 +428,51 @@ class WorkspacesEndpoints:
             return workspace_map
         except Exception as e:
             logger.error(f"Error getting workspaces by IDs: {e}")
+            return {}
+    
+    def get_groups_by_ids(self, group_ids: List[str]) -> Dict[str, WorkspaceGroup]:
+        """
+        Get multiple workspace groups by their IDs in a single API call using the workspaces/groups/list endpoint.
+        This is much more efficient than making individual API calls for each group.
+        
+        Args:
+            group_ids: List of group IDs to retrieve
+            
+        Returns:
+            Dict[str, WorkspaceGroup]: Dictionary of workspace groups by their IDs
+        """
+        if not group_ids:
+            return {}
+            
+        try:
+            # Use the more efficient list endpoint - API expects a direct JSON array, not an object
+            data = self.client.post(ENDPOINT_WORKSPACES_GROUPS_LIST, json=group_ids)
+            
+            # Extract groups from the response
+            groups_data = []
+            if isinstance(data, dict):
+                if FIELD_ITEMS in data and isinstance(data[FIELD_ITEMS], list):
+                    groups_data = data[FIELD_ITEMS]
+                elif FIELD_DATA in data and isinstance(data[FIELD_DATA], list):
+                    groups_data = data[FIELD_DATA]
+                elif FIELD_GROUPS in data and isinstance(data[FIELD_GROUPS], list):
+                    groups_data = data[FIELD_GROUPS]
+                elif isinstance(data.get("groups"), list):
+                    groups_data = data["groups"]
+            elif isinstance(data, list):
+                # The API might directly return an array
+                groups_data = data
+            
+            # Parse groups into models and build the lookup dictionary
+            group_map = {}
+            for group_data in groups_data:
+                try:
+                    group = WorkspaceGroup(**group_data)
+                    group_map[group.id] = group
+                except Exception as e:
+                    logger.warning(f"Could not parse workspace group: {e}")
+            
+            return group_map
+        except Exception as e:
+            logger.error(f"Error getting workspace groups by IDs: {e}")
             return {}

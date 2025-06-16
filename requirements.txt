@@ -7,4 +7,4 @@ idna>=3.10
 anyio>=4.9.0
 sniffio>=1.3.1
 typing-extensions>=4.14.0
-colorama>=0.4.6  # For terminal colors in hierarchy display
+# No additional packages needed for terminal colors as we use ANSI escape codes directly

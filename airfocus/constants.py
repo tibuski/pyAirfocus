@@ -33,6 +33,7 @@ ENDPOINT_WORKSPACES = "/workspaces"
 ENDPOINT_WORKSPACES_SEARCH = "/workspaces/search"
 ENDPOINT_WORKSPACES_LIST = "/workspaces/list"
 ENDPOINT_WORKSPACES_GROUPS = "/workspaces/groups"
+ENDPOINT_WORKSPACES_GROUPS_LIST = "/workspaces/groups/list"
 ENDPOINT_WORKSPACES_GROUPS_SEARCH = "/workspaces/groups/search"
 
 # Response Fields
