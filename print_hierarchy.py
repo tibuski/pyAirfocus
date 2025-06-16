@@ -140,9 +140,51 @@ def print_group_hierarchy_with_users(client):
     for group_id, group in groups_by_id.items():
         all_workspace_ids.update(getattr(group, 'workspace_ids', []))
     
-    # Step 6: Fetch all workspaces in a single API call using the efficient list endpoint
-    print(f"Fetching {len(all_workspace_ids)} workspaces in a single API call...")
-    workspace_map = client.workspaces.get_workspaces_by_ids(list(all_workspace_ids))
+    # Step 6: Fetch detailed workspace information to get permission counts
+    print(f"Fetching detailed information for {len(all_workspace_ids)} workspaces...")
+    workspace_map = {}
+    workspace_user_counts = {}
+    
+    # Fetch individual workspaces to get permission data
+    for ws_id in all_workspace_ids:
+        try:
+            # Fetch the workspace details directly
+            data = client.get(f"/workspaces/{ws_id}")
+            
+            # Add to workspace map
+            from airfocus.models.workspace import Workspace
+            workspace = Workspace(**data)
+            workspace_map[ws_id] = workspace
+            
+            # Extract permissions count
+            user_count = 0
+            
+            # Check for permissions in the _embedded data
+            if '_embedded' in data and 'permissions' in data['_embedded']:
+                permissions = data['_embedded']['permissions']
+                if isinstance(permissions, dict):
+                    user_count = len(permissions)
+                    print(f"Workspace {workspace.name}: Found {user_count} users")
+            
+            # Also check for defaultPermission field
+            if user_count == 0 and 'defaultPermission' in data and data['defaultPermission']:
+                # If defaultPermission is set, at least team members have access
+                user_count = 1
+            
+            workspace_user_counts[ws_id] = user_count
+            
+        except Exception as e:
+            print(f"Error fetching workspace {ws_id}: {e}")
+            # If we can't get detailed info, still try to get basic info
+            try:
+                # Use the bulk API as fallback
+                if not workspace_map.get(ws_id):
+                    basic_workspaces = client.workspaces.get_workspaces_by_ids([ws_id])
+                    if ws_id in basic_workspaces:
+                        workspace_map[ws_id] = basic_workspaces[ws_id]
+                        workspace_user_counts[ws_id] = 0
+            except:
+                pass
     
     # Step 7: Identify top-level groups (no parent)
     top_level_groups = [
@@ -195,7 +237,8 @@ def print_group_hierarchy_with_users(client):
         for i, ws in enumerate(sorted_workspaces):
             is_last_workspace = (i == len(sorted_workspaces) - 1) and len(sorted_child_groups) == 0
             branch = Colors.TREE_CORNER if is_last_workspace else Colors.TREE_BRANCH
-            print(f"{new_prefix}{branch}{Colors.WORKSPACE}{ws.name}{Colors.RESET}")
+            ws_user_count = workspace_user_counts.get(ws.id, 0)
+            print(f"{new_prefix}{branch}{Colors.WORKSPACE}{ws.name} ({ws_user_count} users){Colors.RESET}")
         
         # Print child groups recursively
         for i, child in enumerate(sorted_child_groups):
