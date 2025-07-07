@@ -129,6 +129,47 @@ python test_improvements.py
 
 This will run tests to demonstrate the validation and error handling improvements.
 
+### Manage Permissions (New)
+
+The `manage_permissions.py` script lets you view and update user permissions for Airfocus workspaces and groups from the command line.
+
+**Usage:**
+
+```bash
+python manage_permissions.py --workspace "WORKSPACE_NAME_OR_ID"
+python manage_permissions.py --group "GROUP_NAME_OR_ID"
+python manage_permissions.py --workspace "WORKSPACE_NAME_OR_ID" --file PERMISSIONS_FILE.csv
+python manage_permissions.py --group "GROUP_NAME_OR_ID" --file PERMISSIONS_FILE.csv
+```
+
+- Only one of `--workspace` or `--group` can be specified.
+- Optionally, use `--file` to apply permissions from a CSV file (see below for format).
+- The script prints a table of permissions showing user emails, names, and permission levels (no IDs).
+
+**CSV Format Example:**
+
+```
+email,permission
+user1@example.com,full
+user2@example.com,write
+user3@example.com,comment
+user4@example.com,read
+```
+
+**Example Output:**
+
+```
+Current Permissions for My Workspace
+--------------------------------------------------------------------------------
+Email                                    | Name                          | Permission
+--------------------------------------------------------------------------------
+user1@example.com                        | Alice Example                 | full     
+user2@example.com                        | Bob Example                   | write    
+--------------------------------------------------------------------------------
+```
+
+See the script for more details and options.
+
 ## Project Structure
 
 ```
