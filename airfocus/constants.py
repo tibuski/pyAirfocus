@@ -10,7 +10,7 @@ DEFAULT_TIMEOUT = 30
 SUPPORTED_ROLES = ["admin", "editor", "contributor", "viewer"]
 
 # Permission Levels
-PERMISSION_LEVELS = ["admin", "editor", "viewer"]
+PERMISSION_LEVELS = ["comment", "full", "read", "write"]
 
 # HTTP Status Codes
 HTTP_OK = 200
