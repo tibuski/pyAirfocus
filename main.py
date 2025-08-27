@@ -26,13 +26,30 @@ def getWorkspaces():
     data = {}
     response = postApi('workspaces/search', data)
     return response.json()['items']
- 
+
+def getFields():
+    # data = {"archived": False}
+    data = {}
+    response = postApi('fields/search', data)
+    return response.json()['items']
+
+def getItemsByWorkspaceID(workspaceId):
+    data = {}
+    response = postApi(f"workspaces/{workspaceId}/items/search", data)
+    return response.json()['items']
+
 def main():
 
     allWorkspaces = getWorkspaces()
-    
     for workspace in allWorkspaces:
         print(workspace['name'])
+        items=getItemsByWorkspaceID(workspace['id'])
+        for item in items:
+            print(f"-- {item['name']}")
+            for k,v in item['fields'].items():
+                for k,v in v.items():
+                    print(f"---- {k} : {v}")
 
 if __name__ == "__main__":
     main()
+
