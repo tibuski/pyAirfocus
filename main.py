@@ -24,12 +24,13 @@ def postApi(endpoint,data):
 def getWorkspaces():
     # data = {"archived": False}
     data = {}
-    return postApi('workspaces/search', data)
-
+    response = postApi('workspaces/search', data)
+    return response.json()['items']
+ 
 def main():
 
-    response=getWorkspaces().json()
-    allWorkspaces= response['items']
+    allWorkspaces = getWorkspaces()
+    
     for workspace in allWorkspaces:
         print(workspace['name'])
 
