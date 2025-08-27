@@ -1,19 +1,35 @@
-import os
 import httpx
+import json
 
-URL = 'https://app.airfocus.com/api/'
+from constants import URL
+from os import environ
 
-def airfocusApi(URL,endpoint):
+# Retrieve API key from Environment variable
+if environ.get('AIRFOCUS_KEY') is not None:
+    token = environ.get('AIRFOCUS_KEY')
+else:
+    print("!!! Environment variable AIRFOCUS_KEY needs to be set !!!")
+    exit()
+
+def getApi(endpoint):
     url = f"{URL}{endpoint}"
-    token = os.environ.get('AIRFOCUS_KEY')
     headers = {"Authorization": f"Bearer {token}"}
-    print(f"{url}\n{token}\n{headers}")
-    r = httpx.get(url, headers=headers)
-    print(r.text)
+    return httpx.get(url, headers=headers)
+
+def postApi(endpoint,data):
+    url = f"{URL}{endpoint}"
+    headers = {"Authorization": f"Bearer {token}"}
+    return httpx.post(url, headers=headers, json=data)
+
+def getWorkspaces():
+    data = {"archived": False}
+    return postApi('workspaces/search', data)
 
 def main():
-    print("Environment variable AIRFOCUS_KEY needs to be set !")
-    airfocusApi(URL,'workspaces/count')
+
+    allWorkspaces=(getWorkspaces().json())
+    print(allWorkspaces)
+    
 
 if __name__ == "__main__":
     main()
