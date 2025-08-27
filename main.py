@@ -18,19 +18,20 @@ def getApi(endpoint):
 
 def postApi(endpoint,data):
     url = f"{URL}{endpoint}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"Authorization": f"Bearer {token}","accept": "application/json", "Content-Type": "application/json"}
     return httpx.post(url, headers=headers, json=data)
 
 def getWorkspaces():
-    data = {"archived": False}
+    # data = {"archived": False}
+    data = {}
     return postApi('workspaces/search', data)
 
 def main():
 
-    allWorkspaces=(getWorkspaces().json())
-    print(allWorkspaces)
-    
+    response=getWorkspaces().json()
+    allWorkspaces= response['items']
+    for workspace in allWorkspaces:
+        print(workspace['name'])
 
 if __name__ == "__main__":
     main()
-
