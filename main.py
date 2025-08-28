@@ -82,9 +82,40 @@ def get_items_by_workspace_id(client: httpx.Client, workspace_id: str) -> List[D
     return response.json().get("items", [])
 
 
+def get_all_fields(client: httpx.Client) -> Dict[str, str]:
+    """
+    Get all fields and return a mapping of field ID to field name.
+    
+    Args:
+        client: HTTP client configured with authentication
+        
+    Returns:
+        Dictionary mapping field IDs to field names
+    """
+    # Search for all fields (both team fields and workspace fields)
+    search_query = {}
+    response = post_api(client, "fields/search", search_query)
+    fields = response.json().get("items", [])
+    
+    # Create a mapping of field ID to field name
+    field_mapping = {}
+    for field in fields:
+        field_id = field.get("id")
+        field_name = field.get("name", "<no-name>")
+        if field_id:
+            field_mapping[field_id] = field_name
+    
+    logger.info(f"Loaded {len(field_mapping)} field mappings")
+    return field_mapping
+
+
 def main() -> None:
     token = get_token()
     with make_client(token) as client:
+        # First, load all field mappings
+        logger.info("=== Loading field mappings ===")
+        field_id_to_name = get_all_fields(client)
+        
         logger.info("\n=== Getting workspaces with filter ===")
         filtered_workspaces = get_workspaces(client, name_filter="Phi")
         logger.info(f"Found {len(filtered_workspaces)} filtered workspaces:")
@@ -93,10 +124,13 @@ def main() -> None:
             logger.info(f"  - {name}")
         
         # Process the filtered results (or fall back to all if none found)
-        workspaces_to_process = filtered_workspaces if filtered_workspaces else all_workspaces
-        logger.info(f"\n=== Processing {len(workspaces_to_process)} workspaces ===")
+        if not filtered_workspaces:
+            logger.info("No filtered workspaces found, getting all workspaces...")
+            filtered_workspaces = get_workspaces(client)
         
-        for workspace in workspaces_to_process:
+        logger.info(f"\n=== Processing {len(filtered_workspaces)} workspaces ===")
+        
+        for workspace in filtered_workspaces:
             name = workspace.get("name", "<no-name>")
             logger.info(name)
 
@@ -107,7 +141,10 @@ def main() -> None:
                 logger.info(f"-- {item_name}")
 
                 fields = item.get("fields") or {}
-                for field_key, field_data in fields.items():
+                for field_id, field_data in fields.items():
+                    # Get the human-readable field name from our mapping
+                    field_name = field_id_to_name.get(field_id, f"Unknown Field ({field_id})")
+                    logger.info(f"--- Field: {field_name}")
                     nested = field_data or {}
                     for attr_key, attr_value in nested.items():
                         logger.info(f"---- {attr_key} : {attr_value}")
