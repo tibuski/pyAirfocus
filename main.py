@@ -85,8 +85,8 @@ def get_items_by_workspace_id(client: httpx.Client, workspace_id: str) -> List[D
 def main() -> None:
     token = get_token()
     with make_client(token) as client:
-        logger.info("\n=== Getting workspaces with 'Sigma' filter ===")
-        filtered_workspaces = get_workspaces(client, name_filter="Sigma")
+        logger.info("\n=== Getting workspaces with filter ===")
+        filtered_workspaces = get_workspaces(client, name_filter="Phi")
         logger.info(f"Found {len(filtered_workspaces)} filtered workspaces:")
         for workspace in filtered_workspaces:
             name = workspace.get("name", "<no-name>")
