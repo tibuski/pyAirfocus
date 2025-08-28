@@ -10,6 +10,9 @@ pyvenv.cfg
 Scripts/
 .vscode/
 *.json
+*.xlsx
+*.xls
+
 
 # C extensions
 *.so
