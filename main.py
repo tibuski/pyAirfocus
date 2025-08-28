@@ -463,6 +463,7 @@ def create_field_statuses_json(client: httpx.Client, field_id_to_name: Dict[str,
 def get_workspace_groups(client: httpx.Client) -> Dict[str, Dict[str, Any]]:
     """
     Get all workspace groups and return a mapping of workspace IDs to group information.
+    Handles hierarchical groups by building full parent/child group paths.
     
     Args:
         client: HTTP client configured with authentication
@@ -486,11 +487,11 @@ def get_workspace_groups(client: httpx.Client) -> Dict[str, Dict[str, Any]]:
         # {
         #     "workspace-id-1": {
         #         "group_id": "group-123",
-        #         "group_name": "Development Team"
+        #         "group_name": "Parent Group > Child Group"
         #     },
         #     "workspace-id-2": {
         #         "group_id": "group-456", 
-        #         "group_name": "Production Team"
+        #         "group_name": "Development Team"
         #     }
         # }
     """
@@ -499,6 +500,34 @@ def get_workspace_groups(client: httpx.Client) -> Dict[str, Dict[str, Any]]:
     response = post_api(client, "workspaces/groups/search", search_query)
     groups = response.json().get("items", [])
     
+    # First, create a mapping of group ID to group info for hierarchy building
+    group_info_map = {}
+    for group in groups:
+        group_id = group.get("id")
+        group_name = group.get("name", "<no-group-name>")
+        parent_id = group.get("parentId")
+        
+        group_info_map[group_id] = {
+            "name": group_name,
+            "parent_id": parent_id,
+            "group": group
+        }
+    
+    def build_group_path(group_id: str) -> str:
+        """Build the full hierarchical path for a group."""
+        if group_id not in group_info_map:
+            return "<unknown-group>"
+        
+        group_info = group_info_map[group_id]
+        group_name = group_info["name"]
+        parent_id = group_info["parent_id"]
+        
+        if parent_id and parent_id in group_info_map:
+            parent_path = build_group_path(parent_id)
+            return f"{parent_path} > {group_name}"
+        else:
+            return group_name
+    
     # Create mapping of workspace ID to group info
     workspace_to_group = {}
     
@@ -506,16 +535,19 @@ def get_workspace_groups(client: httpx.Client) -> Dict[str, Dict[str, Any]]:
         group_id = group.get("id")
         group_name = group.get("name", "<no-group-name>")
         
+        # Build the full hierarchical group path
+        full_group_path = build_group_path(group_id)
+        
         # Get workspace IDs from the embedded data
         embedded = group.get("_embedded", {})
         workspace_ids = embedded.get("workspaceIds", [])
         
-        logger.debug(f"Processing group '{group_name}' with {len(workspace_ids)} workspaces")
+        logger.debug(f"Processing group '{full_group_path}' with {len(workspace_ids)} workspaces")
         
         for workspace_id in workspace_ids:
             workspace_to_group[workspace_id] = {
                 "group_id": group_id,
-                "group_name": group_name
+                "group_name": full_group_path
             }
     
     logger.info(f"Loaded {len(groups)} workspace groups covering {len(workspace_to_group)} workspaces")
