@@ -51,19 +51,18 @@ The tool generates a JSON file (`field_statuses.json`) with the following struct
 
 ## Installation
 ```bash
-# Clone the repo
-git clone <your-repo-url> && cd pyAirfocus
-
 # (Optional) Create and activate a virtual environment
-python -m venv .venv
+python -m venv .
+
 # Linux/macOS
-source .venv/bin/activate
+source ./bin/activate
+
 # Windows (PowerShell)
-.venv\\Scripts\\Activate.ps1
+.\Scripts\Activate.ps1
 
 # Install dependencies
-pip install --upgrade pip
-pip install -r requirements.txt
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
 ## Configuration
@@ -73,11 +72,15 @@ The script expects configuration in two places:
 Set `AIRFOCUS_KEY` to your API token (see instructions below)
 
 ### 2. Constants File
-Create a `constants.py` file with:
+Modify the `constants.py` file with:
 
 ```python
 # constants.py
-URL = "https://app.airfocus.com/api"  # Note: /api endpoint, not root URL
+
+# Airfocus API Url. Documentation at https://developer.airfocus.com
+URL = "https://app.airfocus.com/api"
+
+# Field names to ignore when processing data (case-insensitive)
 IGNORED_FIELDS = [
     "mirror target",
     "insights"
@@ -110,12 +113,6 @@ setx AIRFOCUS_KEY "<your_api_token_here>"
 ```bash
 # Current shell session only
 export AIRFOCUS_KEY="<your_api_token_here>"
-
-# Persist by adding to your shell profile
-# For bash:
-echo 'export AIRFOCUS_KEY="<your_api_token_here>"' >> ~/.bashrc && source ~/.bashrc
-# For zsh:
-echo 'export AIRFOCUS_KEY="<your_api_token_here>"' >> ~/.zshrc && source ~/.zshrc
 ```
 
 ## Usage
@@ -157,76 +154,3 @@ INFO:__main__:Loaded 19 workspace groups covering 71 workspaces
 INFO:__main__:Data gathering complete. Processing 28 workspaces with 33 unique fields...
 INFO:__main__:Field presence data saved to field_statuses.json
 ```
-
-## Run
-
-```
-
-## API Functions
-
-The tool provides several key functions for interacting with the Airfocus API:
-
-### Core Functions
-
-- **`get_workspaces()`**: Retrieve workspaces with optional filtering by name or group
-- **`get_workspace_groups()`**: Load workspace group mappings
-- **`get_all_fields()`**: Load field definitions and selection options
-- **`get_items_by_workspace_id()`**: Retrieve all items from a specific workspace
-- **`get_workspace_statuses_from_embedded()`**: Extract status mappings from workspace data
-- **`create_field_statuses_json()`**: Generate the complete field presence analysis
-
-### Filtering Options (Programmatic)
-
-- **Workspace Name Filter**: `name_filter="alpha"` - matches workspaces containing "alpha" (partial match)
-- **Group Name Filter**: `group_name_filter="product"` - matches workspaces in groups containing "product" (partial match)
-- **Case Sensitivity**: `case_sensitive=True` - enables exact case matching
-- **Combined Filters**: Use both name and group filters together
-
-### Example Usage
-
-```python
-# Get all workspaces in groups containing "product"
-workspaces = get_workspaces(client, group_name_filter="product")
-
-# Get workspaces with "alpha" in the name from groups containing "product"
-workspaces = get_workspaces(client, name_filter="alpha", group_name_filter="product")
-
-# Generate field analysis with custom ignored fields
-ignored = ["mirror target", "insights", "internal notes"]
-result = create_field_statuses_json(client, field_mapping, workspaces, ignored)
-```
-
-## Notes
-
-### Performance & API Optimization
-- **Efficient API Usage**: The client minimizes API calls by gathering data in batches
-- **Status Extraction**: Status names are extracted from workspace embedded data (no additional API calls)
-- **Single HTTP Client**: Uses one `httpx.Client` instance with appropriate timeouts
-- **Smart Caching**: Field mappings and workspace groups are loaded once per execution
-
-### Data Processing
-- **Field Presence Logic**: A field is considered "present" (True) if it has any non-empty, non-null values
-- **Status Integration**: Each item includes a `_status` field with the human-readable status name
-- **Group Organization**: Workspaces are automatically organized by their group membership
-- **Flexible Filtering**: Support for workspace name, group name, and case sensitivity options
-
-### Output Details
-- **Hierarchical Structure**: Group → Workspace → Items → Fields
-- **Comprehensive Totals**: Both workspace-level and global statistics
-- **UTF-8 Encoding**: Proper handling of international characters
-- **JSON Format**: Human-readable with proper indentation
-
-### Error Handling
-- **Missing Environment Variables**: Clear error messages if `AIRFOCUS_KEY` is not set
-- **API Failures**: Graceful handling of network and API errors
-- **Missing Data**: Safe handling of workspaces without groups or items without statuses
-
-### Security
-- **SSL Verification**: Currently disabled for corporate network compatibility (`verify=False`)
-- **Token Security**: API token is loaded from environment variable (not hardcoded)
-
-### Logging
-- **INFO Level**: Progress information and statistics are logged
-- **DEBUG Level**: Detailed API request/response information (can be enabled by changing log level)
-
-If the environment variable is not set, the script will exit with an error message.
