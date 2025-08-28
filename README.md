@@ -120,36 +120,28 @@ echo 'export AIRFOCUS_KEY="<your_api_token_here>"' >> ~/.zshrc && source ~/.zshr
 
 ## Usage
 
-### Basic Usage
+The script provides command-line options. Running with no arguments shows the help.
+
+### Show help
 ```bash
 python main.py
 ```
 
-By default, the script analyzes workspaces in the "Cluster CC" group. 
+### Options
+- `--workspace-filter TEXT`: Filter workspaces whose name contains TEXT (partial match)
+- `--group-filter TEXT`: Filter workspaces whose group name contains TEXT (partial match; use `<no-group>` for ungrouped)
+- `-o, --output FILE`: Output JSON file (default: `field_statuses.json`)
 
-### Customization Options
+### Examples
+```bash
+# Partial match by workspace name
+python main.py --workspace-filter alpha
 
-The script can be customized by modifying the `main()` function in `main.py`:
+# Partial match by group name
+python main.py --group-filter product
 
-```python
-# Filter by workspace group name
-filtered_workspaces = get_workspaces(client, group_name_filter="Cluster CC")
-
-# Filter by workspace name containing specific text
-filtered_workspaces = get_workspaces(client, name_filter="Crew")
-
-# Filter by both workspace name AND group name
-filtered_workspaces = get_workspaces(client, name_filter="Crew", group_name_filter="Development")
-
-# Get all workspaces (no filter)
-filtered_workspaces = get_workspaces(client)
-
-# Case-sensitive filtering
-filtered_workspaces = get_workspaces(client, name_filter="CreW", case_sensitive=True)
-
-# Custom ignored fields (overrides constants.py)
-custom_ignored = ["mirror target", "insights", "created by"]
-field_statuses_data = create_field_statuses_json(client, field_mapping, workspaces, custom_ignored)
+# Combine both filters and set custom output filename
+python main.py --workspace-filter alpha --group-filter product --output result.json
 ```
 
 ### Output
@@ -183,21 +175,21 @@ The tool provides several key functions for interacting with the Airfocus API:
 - **`get_workspace_statuses_from_embedded()`**: Extract status mappings from workspace data
 - **`create_field_statuses_json()`**: Generate the complete field presence analysis
 
-### Filtering Options
+### Filtering Options (Programmatic)
 
-- **Workspace Name Filter**: `name_filter="Crew"` - matches workspaces containing "Crew"
-- **Group Name Filter**: `group_name_filter="Development"` - matches workspaces in groups containing "Development"
+- **Workspace Name Filter**: `name_filter="alpha"` - matches workspaces containing "alpha" (partial match)
+- **Group Name Filter**: `group_name_filter="product"` - matches workspaces in groups containing "product" (partial match)
 - **Case Sensitivity**: `case_sensitive=True` - enables exact case matching
 - **Combined Filters**: Use both name and group filters together
 
 ### Example Usage
 
 ```python
-# Get all workspaces in groups containing "Cluster"
-workspaces = get_workspaces(client, group_name_filter="Cluster")
+# Get all workspaces in groups containing "product"
+workspaces = get_workspaces(client, group_name_filter="product")
 
-# Get workspaces with "Crew" in the name from "Development" groups
-workspaces = get_workspaces(client, name_filter="Crew", group_name_filter="Development")
+# Get workspaces with "alpha" in the name from groups containing "product"
+workspaces = get_workspaces(client, name_filter="alpha", group_name_filter="product")
 
 # Generate field analysis with custom ignored fields
 ignored = ["mirror target", "insights", "internal notes"]

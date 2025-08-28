@@ -3,13 +3,57 @@ import logging
 import os
 import sys
 import json
-from typing import Any, Dict, List
+import argparse
 
+from typing import Any, Dict, List
 from constants import URL, IGNORED_FIELDS
 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+class HelpOnErrorParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        # Show usage and full help on any error, then exit with status 2
+        self.print_usage(sys.stderr)
+        # print_help doesn't accept stream prior to 3.10; use format_help for portability
+        sys.stderr.write(self.format_help())
+        self.exit(2, f"{self.prog}: error: {message}\n")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = HelpOnErrorParser(
+        description="Generate field presence JSON for airfocus workspaces",
+        add_help=True,
+    )
+    parser.add_argument(
+        "--workspace-filter",
+        dest="workspace_filter",
+        metavar="TEXT",
+        help="Filter workspaces whose name contains TEXT (partial match)",
+    )
+    parser.add_argument(
+        "--group-filter",
+        dest="group_filter",
+        metavar="TEXT",
+        help="Filter workspaces whose group name contains TEXT (partial match, use <no-group> for ungrouped)",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        dest="output",
+        default="field_statuses.json",
+        metavar="FILE",
+        help="Output JSON file (default: field_statuses.json)",
+    )
+
+    # Show help and exit when no arguments are provided
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(0)
+
+    return parser.parse_args()
 
 
 def get_token() -> str:
@@ -56,17 +100,17 @@ def get_workspaces(client: httpx.Client, name_filter: str = None, group_name_fil
         # Get all workspaces
         workspaces = get_workspaces(client)
         
-        # Filter by workspace name containing "Crew"
-        crew_workspaces = get_workspaces(client, name_filter="Crew")
+        # Filter by workspace name containing specific text (partial match)
+        filtered_by_name = get_workspaces(client, name_filter="alpha")
         
-        # Filter by workspace group name containing "Development"
-        dev_workspaces = get_workspaces(client, group_name_filter="Development")
+        # Filter by workspace group name containing specific text (partial match)
+        filtered_by_group = get_workspaces(client, group_name_filter="product")
         
         # Filter by both workspace name AND group name
-        specific_workspaces = get_workspaces(client, name_filter="Crew", group_name_filter="Dev")
+        specific_workspaces = get_workspaces(client, name_filter="alpha", group_name_filter="product")
         
         # Case-sensitive filtering
-        exact_workspaces = get_workspaces(client, name_filter="CreW", case_sensitive=True)
+        exact_workspaces = get_workspaces(client, name_filter="Alpha", case_sensitive=True)
         
         # Find workspaces that are not in any group
         ungrouped = get_workspaces(client, group_name_filter="<no-group>")
@@ -237,7 +281,7 @@ def create_field_statuses_json(client: httpx.Client, field_id_to_name: Dict[str,
     Examples:
         # Basic usage with default ignored fields
         field_mapping, _ = get_all_fields(client)
-        workspaces = get_workspaces(client, name_filter="Crew")
+        workspaces = get_workspaces(client, name_filter="alpha")
         result = create_field_statuses_json(client, field_mapping, workspaces)
         
         # Custom ignored fields
@@ -246,8 +290,8 @@ def create_field_statuses_json(client: httpx.Client, field_id_to_name: Dict[str,
         
         # Example output structure:
         # {
-        #     "Development Team": {
-        #         "Crew Athena": {
+        #     "Group A": {
+        #         "Workspace A": {
         #             "Item 1": {
         #                 "Field A": true,
         #                 "Field B": false
@@ -479,18 +523,20 @@ def get_workspace_groups(client: httpx.Client) -> Dict[str, Dict[str, Any]]:
 
 
 def main() -> None:
+    args = parse_args()
     token = get_token()
     with make_client(token) as client:
         # First, load all field mappings and selection options
         logger.info("=== Loading field mappings ===")
         field_id_to_name, field_selections = get_all_fields(client)
         
-        logger.info("\n=== Getting workspaces with filter ===")
-        # You can filter by workspace name or workspace group name
-        # First test: get all workspaces without filter to see basic functionality
-        filtered_workspaces = get_workspaces(client, group_name_filter="Cluster CC")  # Filter by workspace name
-        # Alternative: filter by group name instead
-        # filtered_workspaces = get_workspaces(client, group_name_filter="Your Group Name")
+        logger.info("\n=== Getting workspaces with filter (partial match supported) ===")
+        filtered_workspaces = get_workspaces(
+            client,
+            name_filter=args.workspace_filter,
+            group_name_filter=args.group_filter,
+        )
+
         
         logger.info(f"Found {len(filtered_workspaces)} filtered workspaces:")
         for workspace in filtered_workspaces:
@@ -509,7 +555,7 @@ def main() -> None:
         field_statuses_data = create_field_statuses_json(client, field_id_to_name, filtered_workspaces, IGNORED_FIELDS)
         
         # Save to JSON file
-        output_file = "field_statuses.json"
+        output_file = args.output
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(field_statuses_data, f, indent=2, ensure_ascii=False)
         
