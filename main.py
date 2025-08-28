@@ -290,26 +290,32 @@ def create_field_statuses_json(client: httpx.Client, field_id_to_name: Dict[str,
         
         # Example output structure:
         # {
+        #     "_GLOBAL_TOTALS": {
+        #         "total_true_fields": 500,
+        #         "total_false_fields": 300,
+        #         "total_workspaces": 5,
+        #         "total_items": 100,
+        #         "total_unique_fields": 25,
+        #         "ignored_fields": ["mirror target", "insights"]
+        #     },
         #     "Group A": {
         #         "Workspace A": {
-        #             "Item 1": {
-        #                 "Field A": true,
-        #                 "Field B": false
-        #             },
         #             "_WORKSPACE_TOTALS": {
         #                 "total_true_fields": 150,
         #                 "total_false_fields": 75,
-        #                 "total_items": 25
+        #                 "total_items": 25,
+        #                 "total_unique_fields": 25,
+        #                 "ignored_fields": ["mirror target", "insights"]
+        #             },
+        #             "Item 1": {
+        #                 "Field A": true,
+        #                 "Field B": false,
+        #                 "_status": "In Progress"
         #             }
         #         }
         #     },
         #     "<no-group>": {
         #         "Ungrouped Workspace": { ... }
-        #     },
-        #     "_GLOBAL_TOTALS": {
-        #         "total_true_fields": 500,
-        #         "total_false_fields": 300,
-        #         "total_workspaces": 5
         #     }
         # }
     """
@@ -352,21 +358,22 @@ def create_field_statuses_json(client: httpx.Client, field_id_to_name: Dict[str,
             "status_mapping": status_mapping
         }
         
-        # Collect all field names from this workspace's items
+        # Collect all unique field names from this workspace's items
+        # This ensures we have a complete set of fields across all workspaces
         for item in items:
             fields = item.get("fields") or {}
             for field_id in fields.keys():
                 field_name = field_id_to_name.get(field_id, "Unknown Field")
-                # Skip ignored fields
+                # Skip ignored fields (like "mirror target", "insights")
                 if field_name.lower() not in ignored_field_names_lower:
                     all_field_names.add(field_name)
     
     logger.info(f"Data gathering complete. Processing {len(workspace_data)} workspaces with {len(all_field_names)} unique fields...")
     
-    # Organize workspaces by groups
+    # Organize workspaces by their hierarchical groups
     groups_structure = {}
     
-    # Now process the gathered data locally (no more API calls)
+    # Now process the gathered data locally (no more API calls needed)
     for workspace in workspaces:
         workspace_name = workspace.get("name", "<no-name>")
         workspace_id = workspace.get("id", "")
@@ -436,18 +443,28 @@ def create_field_statuses_json(client: httpx.Client, field_id_to_name: Dict[str,
             groups_structure[group_name][workspace_name][item_name] = item_fields
         
         # Add workspace totals
-        groups_structure[group_name][workspace_name]["_WORKSPACE_TOTALS"] = {
+        workspace_totals = {
             "total_true_fields": workspace_true_count,
             "total_false_fields": workspace_false_count,
             "total_items": len(items),
             "total_unique_fields": len(all_field_names),
             "ignored_fields": ignored_field_names
         }
+        
+        # Create ordered workspace data with totals first
+        workspace_data_ordered = {
+            "_WORKSPACE_TOTALS": workspace_totals
+        }
+        # Add all items after the totals
+        for item_name, item_fields in groups_structure[group_name][workspace_name].items():
+            workspace_data_ordered[item_name] = item_fields
+        
+        groups_structure[group_name][workspace_name] = workspace_data_ordered
     
-    # Copy the groups structure to result
-    result = groups_structure
+    # Create result with proper ordering: Global totals first, then groups
+    result = {}
     
-    # Add global totals at the end
+    # Add global totals at the beginning
     result["_GLOBAL_TOTALS"] = {
         "total_true_fields": global_true_count,
         "total_false_fields": global_false_count,
@@ -456,6 +473,10 @@ def create_field_statuses_json(client: httpx.Client, field_id_to_name: Dict[str,
         "total_unique_fields": len(all_field_names),
         "ignored_fields": ignored_field_names
     }
+    
+    # Add all groups after global totals
+    for group_name, group_data in groups_structure.items():
+        result[group_name] = group_data
     
     return result
 
@@ -483,7 +504,7 @@ def get_workspace_groups(client: httpx.Client) -> Dict[str, Dict[str, Any]]:
         else:
             print("Workspace is not in any group")
             
-        # Example output structure:
+        # Example output structure with hierarchical groups:
         # {
         #     "workspace-id-1": {
         #         "group_id": "group-123",
@@ -492,6 +513,10 @@ def get_workspace_groups(client: httpx.Client) -> Dict[str, Dict[str, Any]]:
         #     "workspace-id-2": {
         #         "group_id": "group-456", 
         #         "group_name": "Development Team"
+        #     },
+        #     "workspace-id-3": {
+        #         "group_id": "group-789",
+        #         "group_name": "Company > Engineering > Backend Team"
         #     }
         # }
     """
@@ -501,11 +526,12 @@ def get_workspace_groups(client: httpx.Client) -> Dict[str, Dict[str, Any]]:
     groups = response.json().get("items", [])
     
     # First, create a mapping of group ID to group info for hierarchy building
+    # This allows us to efficiently traverse parent-child relationships
     group_info_map = {}
     for group in groups:
         group_id = group.get("id")
         group_name = group.get("name", "<no-group-name>")
-        parent_id = group.get("parentId")
+        parent_id = group.get("parentId")  # None for top-level groups
         
         group_info_map[group_id] = {
             "name": group_name,
@@ -514,7 +540,18 @@ def get_workspace_groups(client: httpx.Client) -> Dict[str, Dict[str, Any]]:
         }
     
     def build_group_path(group_id: str) -> str:
-        """Build the full hierarchical path for a group."""
+        """
+        Build the full hierarchical path for a group.
+        
+        Recursively traverses up the parent chain to build a path like:
+        "Top Level > Sub Group > Child Group"
+        
+        Args:
+            group_id: The ID of the group to build the path for
+            
+        Returns:
+            Full hierarchical path string with " > " as separator
+        """
         if group_id not in group_info_map:
             return "<unknown-group>"
         
@@ -522,32 +559,35 @@ def get_workspace_groups(client: httpx.Client) -> Dict[str, Dict[str, Any]]:
         group_name = group_info["name"]
         parent_id = group_info["parent_id"]
         
+        # Recursively build parent path if this group has a parent
         if parent_id and parent_id in group_info_map:
             parent_path = build_group_path(parent_id)
             return f"{parent_path} > {group_name}"
         else:
+            # This is a top-level group, return just the name
             return group_name
     
-    # Create mapping of workspace ID to group info
+    # Create mapping of workspace ID to group info with full hierarchical paths
     workspace_to_group = {}
     
     for group in groups:
         group_id = group.get("id")
         group_name = group.get("name", "<no-group-name>")
         
-        # Build the full hierarchical group path
+        # Build the full hierarchical group path (e.g., "Parent > Child > Grandchild")
         full_group_path = build_group_path(group_id)
         
-        # Get workspace IDs from the embedded data
+        # Get workspace IDs that belong directly to this group
         embedded = group.get("_embedded", {})
         workspace_ids = embedded.get("workspaceIds", [])
         
         logger.debug(f"Processing group '{full_group_path}' with {len(workspace_ids)} workspaces")
         
+        # Map each workspace to its group with the full hierarchical path
         for workspace_id in workspace_ids:
             workspace_to_group[workspace_id] = {
                 "group_id": group_id,
-                "group_name": full_group_path
+                "group_name": full_group_path  # This now includes the full hierarchy
             }
     
     logger.info(f"Loaded {len(groups)} workspace groups covering {len(workspace_to_group)} workspaces")
