@@ -9,6 +9,7 @@ __pycache__/
 pyvenv.cfg
 Scripts/
 .vscode/
+*.json
 
 # C extensions
 *.so
