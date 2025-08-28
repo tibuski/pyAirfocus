@@ -31,7 +31,7 @@ The script expects two things:
 Example `constants.py`:
 ```python
 # constants.py
-URL = "https://api.airfocus.com/v1/"
+URL = "https://api.airfocus.com/"
 ```
 
 ## Set the environment variable from the command line
