@@ -5,7 +5,7 @@ import sys
 import json
 import argparse
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, NoReturn
 from constants import URL, IGNORED_FIELDS
 
 
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class HelpOnErrorParser(argparse.ArgumentParser):
-    def error(self, message: str) -> None:
+    def error(self, message: str) -> NoReturn:
         # Show usage and full help on any error, then exit with status 2
         self.print_usage(sys.stderr)
         # print_help doesn't accept stream prior to 3.10; use format_help for portability
@@ -83,7 +83,7 @@ def post_api(client: httpx.Client, endpoint: str, data: Dict[str, Any]) -> httpx
     return response
 
 
-def get_workspaces(client: httpx.Client, name_filter: str = None, group_name_filter: str = None, case_sensitive: bool = False) -> List[Dict[str, Any]]:
+def get_workspaces(client: httpx.Client, name_filter: str | None = None, group_name_filter: str | None = None, case_sensitive: bool = False) -> List[Dict[str, Any]]:
     """
     Get workspaces, optionally filtered by name or workspace group name containing a specific string.
     
@@ -265,7 +265,7 @@ def get_workspace_statuses_from_embedded(workspace: Dict[str, Any]) -> Dict[str,
     return status_mapping
 
 
-def create_field_statuses_json(client: httpx.Client, field_id_to_name: Dict[str, str], workspaces: List[Dict[str, Any]], ignored_field_names: List[str] = None) -> Dict[str, Any]:
+def create_field_statuses_json(client: httpx.Client, field_id_to_name: Dict[str, str], workspaces: List[Dict[str, Any]], ignored_field_names: List[str] | None = None) -> Dict[str, Any]:
     """
     Create a JSON structure showing field presence (True/False) for each item in each workspace, organized by workspace groups.
     
