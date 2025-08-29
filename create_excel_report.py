@@ -119,43 +119,287 @@ def create_excel_report(workspaces_data, output_file):
         summary_header = list(df_summary.columns)
         filled_col_idx = summary_header.index('Total Filled Fields') + 1  # +1 for Excel 1-based indexing
         unset_col_idx = summary_header.index('Total Unset Fields') + 1
+        items_col_idx = summary_header.index('Total Items') + 1
+        unique_fields_col_idx = summary_header.index('Total Unique Fields') + 1
         
         # Convert column indices to letters
         from openpyxl.utils import get_column_letter
         filled_col_letter = get_column_letter(filled_col_idx)
         unset_col_letter = get_column_letter(unset_col_idx)
+        items_col_letter = get_column_letter(items_col_idx)
+        unique_fields_col_letter = get_column_letter(unique_fields_col_idx)
         
         # Define the data range (excluding header)
         data_start_row = 2
         data_end_row = len(df_summary) + 1
         
-        # Create conditional formatting rules for Total Filled Fields
-        from openpyxl.formatting.rule import ColorScaleRule
+        # Import required formatting classes
+        from openpyxl.formatting.rule import CellIsRule
+        from openpyxl.styles import PatternFill
         
-        # Red to Green color scale for Total Filled Fields
-        filled_rule = ColorScaleRule(
-            start_type='percentile', start_value=0, start_color='FFB3B3',  # Pastel Red
-            mid_type='percentile', mid_value=50, mid_color='FFFFB3',      # Pastel Yellow
-            end_type='percentile', end_value=100, end_color='B3FFB3'      # Pastel Green
-        )
+        # Define fill colors for conditional formatting - 5 red to 5 green evolution
+        # Red variations (poor performance) - 5 levels
+        dark_red_fill = PatternFill(start_color='FFB3B3', end_color='FFB3B3', fill_type='solid')      # Dark red
+        red_fill = PatternFill(start_color='FFCCCC', end_color='FFCCCC', fill_type='solid')           # Red
+        medium_red_fill = PatternFill(start_color='FFD9D9', end_color='FFD9D9', fill_type='solid')    # Medium red
+        light_red_fill = PatternFill(start_color='FFE6E6', end_color='FFE6E6', fill_type='solid')     # Light red
+        very_light_red_fill = PatternFill(start_color='FFF2F2', end_color='FFF2F2', fill_type='solid') # Very light red
         
-        # Red to Green color scale for Total Unset Fields (inverted - less unset is better)
-        unset_rule = ColorScaleRule(
-            start_type='percentile', start_value=0, start_color='B3FFB3',  # Pastel Green (low unset is good)
-            mid_type='percentile', mid_value=50, mid_color='FFFFB3',      # Pastel Yellow
-            end_type='percentile', end_value=100, end_color='FFB3B3'      # Pastel Red (high unset is bad)
-        )
+        # Green variations (excellent performance) - 5 levels
+        very_light_green_fill = PatternFill(start_color='F2FFF2', end_color='F2FFF2', fill_type='solid') # Very light green
+        light_green_fill = PatternFill(start_color='E6F3E6', end_color='E6F3E6', fill_type='solid')    # Light green
+        medium_green_fill = PatternFill(start_color='D9E6D9', end_color='D9E6D9', fill_type='solid')   # Medium green
+        green_fill = PatternFill(start_color='CCE6CC', end_color='CCE6CC', fill_type='solid')           # Green
+        dark_green_fill = PatternFill(start_color='B3D9B3', end_color='B3D9B3', fill_type='solid')     # Dark green
         
-        # Apply conditional formatting
-        summary_ws.conditional_formatting.add(
-            f'{filled_col_letter}{data_start_row}:{filled_col_letter}{data_end_row}',
-            filled_rule
-        )
+        # Apply conditional formatting row by row for Total Filled Fields
+        for row in range(data_start_row, data_end_row + 1):
+            # Calculate percentage thresholds for this row
+            # Formula: =IF(AND(D2>0,E2>0),D2/(D2*E2),0) - but we'll use the actual values
+            
+            # Get the actual values for this row
+            items_value = df_summary.iloc[row - data_start_row]['Total Items']
+            unique_fields_value = df_summary.iloc[row - data_start_row]['Total Unique Fields']
+            
+            if items_value > 0 and unique_fields_value > 0:
+                max_possible_fields = items_value * unique_fields_value
+                
+                # Apply conditional formatting based on percentage thresholds with 5 red to 5 green evolution
+                # 0-10% dark red, 11-20% red, 21-30% medium red, 31-40% light red, 41-50% very light red,
+                # 51-60% very light green, 61-70% light green, 71-80% medium green, 81-90% green, 91-100% dark green
+                
+                # Dark red: 0-10%
+                dark_red_rule = CellIsRule(
+                    operator='between',
+                    formula=[f'0', f'{max_possible_fields * 0.1}'],
+                    fill=dark_red_fill
+                )
+                summary_ws.conditional_formatting.add(
+                    f'{filled_col_letter}{row}',
+                    dark_red_rule
+                )
+                
+                # Red: 11-20%
+                red_rule = CellIsRule(
+                    operator='between',
+                    formula=[f'{max_possible_fields * 0.1 + 1}', f'{max_possible_fields * 0.2}'],
+                    fill=red_fill
+                )
+                summary_ws.conditional_formatting.add(
+                    f'{filled_col_letter}{row}',
+                    red_rule
+                )
+                
+                # Medium red: 21-30%
+                medium_red_rule = CellIsRule(
+                    operator='between',
+                    formula=[f'{max_possible_fields * 0.2 + 1}', f'{max_possible_fields * 0.3}'],
+                    fill=medium_red_fill
+                )
+                summary_ws.conditional_formatting.add(
+                    f'{filled_col_letter}{row}',
+                    medium_red_rule
+                )
+                
+                # Light red: 31-40%
+                light_red_rule = CellIsRule(
+                    operator='between',
+                    formula=[f'{max_possible_fields * 0.3 + 1}', f'{max_possible_fields * 0.4}'],
+                    fill=light_red_fill
+                )
+                summary_ws.conditional_formatting.add(
+                    f'{filled_col_letter}{row}',
+                    light_red_rule
+                )
+                
+                # Very light red: 41-50%
+                very_light_red_rule = CellIsRule(
+                    operator='between',
+                    formula=[f'{max_possible_fields * 0.4 + 1}', f'{max_possible_fields * 0.5}'],
+                    fill=very_light_red_fill
+                )
+                summary_ws.conditional_formatting.add(
+                    f'{filled_col_letter}{row}',
+                    very_light_red_rule
+                )
+                
+                # Very light green: 51-60%
+                very_light_green_rule = CellIsRule(
+                    operator='between',
+                    formula=[f'{max_possible_fields * 0.5 + 1}', f'{max_possible_fields * 0.6}'],
+                    fill=very_light_green_fill
+                )
+                summary_ws.conditional_formatting.add(
+                    f'{filled_col_letter}{row}',
+                    very_light_green_rule
+                )
+                
+                # Light green: 61-70%
+                light_green_rule = CellIsRule(
+                    operator='between',
+                    formula=[f'{max_possible_fields * 0.6 + 1}', f'{max_possible_fields * 0.7}'],
+                    fill=light_green_fill
+                )
+                summary_ws.conditional_formatting.add(
+                    f'{filled_col_letter}{row}',
+                    light_green_rule
+                )
+                
+                # Medium green: 71-80%
+                medium_green_rule = CellIsRule(
+                    operator='between',
+                    formula=[f'{max_possible_fields * 0.7 + 1}', f'{max_possible_fields * 0.8}'],
+                    fill=medium_green_fill
+                )
+                summary_ws.conditional_formatting.add(
+                    f'{filled_col_letter}{row}',
+                    medium_green_rule
+                )
+                
+                # Green: 81-90%
+                green_rule = CellIsRule(
+                    operator='between',
+                    formula=[f'{max_possible_fields * 0.8 + 1}', f'{max_possible_fields * 0.9}'],
+                    fill=green_fill
+                )
+                summary_ws.conditional_formatting.add(
+                    f'{filled_col_letter}{row}',
+                    green_rule
+                )
+                
+                # Dark green: 91-100%
+                dark_green_rule = CellIsRule(
+                    operator='between',
+                    formula=[f'{max_possible_fields * 0.9 + 1}', f'{max_possible_fields}'],
+                    fill=dark_green_fill
+                )
+                summary_ws.conditional_formatting.add(
+                    f'{filled_col_letter}{row}',
+                    dark_green_rule
+                )
         
-        summary_ws.conditional_formatting.add(
-            f'{unset_col_letter}{data_start_row}:{unset_col_letter}{data_end_row}',
-            unset_rule
-        )
+        # Apply conditional formatting row by row for Total Unset Fields (inverted evolution)
+        for row in range(data_start_row, data_end_row + 1):
+            # Get the actual values for this row
+            items_value = df_summary.iloc[row - data_start_row]['Total Items']
+            unique_fields_value = df_summary.iloc[row - data_start_row]['Total Unique Fields']
+            
+            if items_value > 0 and unique_fields_value > 0:
+                max_possible_fields = items_value * unique_fields_value
+                
+                # Apply conditional formatting based on percentage thresholds (inverted evolution)
+                # 0-10% dark green, 11-20% green, 21-30% medium green, 31-40% light green, 41-50% very light green,
+                # 51-60% very light red, 61-70% light red, 71-80% medium red, 81-90% red, 91-100% dark red
+                
+                # Dark green: 0-10%
+                dark_green_rule = CellIsRule(
+                    operator='between',
+                    formula=[f'0', f'{max_possible_fields * 0.1}'],
+                    fill=dark_green_fill
+                )
+                summary_ws.conditional_formatting.add(
+                    f'{unset_col_letter}{row}',
+                    dark_green_rule
+                )
+                
+                # Green: 11-20%
+                green_rule = CellIsRule(
+                    operator='between',
+                    formula=[f'{max_possible_fields * 0.1 + 1}', f'{max_possible_fields * 0.2}'],
+                    fill=green_fill
+                )
+                summary_ws.conditional_formatting.add(
+                    f'{unset_col_letter}{row}',
+                    green_rule
+                )
+                
+                # Medium green: 21-30%
+                medium_green_rule = CellIsRule(
+                    operator='between',
+                    formula=[f'{max_possible_fields * 0.2 + 1}', f'{max_possible_fields * 0.3}'],
+                    fill=medium_green_fill
+                )
+                summary_ws.conditional_formatting.add(
+                    f'{unset_col_letter}{row}',
+                    medium_green_rule
+                )
+                
+                # Light green: 31-40%
+                light_green_rule = CellIsRule(
+                    operator='between',
+                    formula=[f'{max_possible_fields * 0.3 + 1}', f'{max_possible_fields * 0.4}'],
+                    fill=light_green_fill
+                )
+                summary_ws.conditional_formatting.add(
+                    f'{unset_col_letter}{row}',
+                    light_green_rule
+                )
+                
+                # Very light green: 41-50%
+                very_light_green_rule = CellIsRule(
+                    operator='between',
+                    formula=[f'{max_possible_fields * 0.4 + 1}', f'{max_possible_fields * 0.5}'],
+                    fill=very_light_green_fill
+                )
+                summary_ws.conditional_formatting.add(
+                    f'{unset_col_letter}{row}',
+                    very_light_green_rule
+                )
+                
+                # Very light red: 51-60%
+                very_light_red_rule = CellIsRule(
+                    operator='between',
+                    formula=[f'{max_possible_fields * 0.5 + 1}', f'{max_possible_fields * 0.6}'],
+                    fill=very_light_red_fill
+                )
+                summary_ws.conditional_formatting.add(
+                    f'{unset_col_letter}{row}',
+                    very_light_red_rule
+                )
+                
+                # Light red: 61-70%
+                light_red_rule = CellIsRule(
+                    operator='between',
+                    formula=[f'{max_possible_fields * 0.6 + 1}', f'{max_possible_fields * 0.7}'],
+                    fill=light_red_fill
+                )
+                summary_ws.conditional_formatting.add(
+                    f'{unset_col_letter}{row}',
+                    light_red_rule
+                )
+                
+                # Medium red: 71-80%
+                medium_red_rule = CellIsRule(
+                    operator='between',
+                    formula=[f'{max_possible_fields * 0.7 + 1}', f'{max_possible_fields * 0.8}'],
+                    fill=medium_red_fill
+                )
+                summary_ws.conditional_formatting.add(
+                    f'{unset_col_letter}{row}',
+                    medium_red_rule
+                )
+                
+                # Red: 81-90%
+                red_rule = CellIsRule(
+                    operator='between',
+                    formula=[f'{max_possible_fields * 0.8 + 1}', f'{max_possible_fields * 0.9}'],
+                    fill=red_fill
+                )
+                summary_ws.conditional_formatting.add(
+                    f'{unset_col_letter}{row}',
+                    red_rule
+                )
+                
+                # Dark red: 91-100%
+                dark_red_rule = CellIsRule(
+                    operator='between',
+                    formula=[f'{max_possible_fields * 0.9 + 1}', f'{max_possible_fields}'],
+                    fill=dark_red_fill
+                )
+                summary_ws.conditional_formatting.add(
+                    f'{unset_col_letter}{row}',
+                    dark_red_rule
+                )
         
         # Apply modern orange theme to all sheets
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
